@@ -1,5 +1,6 @@
 import hashlib
 import os
+import pandas as pd
 
 import streamlit as st
 
@@ -45,14 +46,14 @@ if st.sidebar.button("Login"):
 def _init():
     return superduper(
         mongodb_uri,
-        artifact_store="filesystem:///Users/zhouhaha/workspace/SuperDuperDB/pocs/volvo/data/artifacts/",
-        downloads_folder="/Users/zhouhaha/workspace/SuperDuperDB/pocs/volvo/data/downloads",
+        artifact_store="filesystem://data/artifacts/",
+        downloads_folder="./data/downloads",
     )
 
 
 CFG.cluster.backfill_batch_size = 5000
 
-mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/volvo-demo")
+mongodb_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/volvo")
 db = _init()
 
 st.title("Volvo with SuperDuperDB")
@@ -71,12 +72,27 @@ def _vector_search(k, v, index, n=3):
     return sorted(results, key=lambda x: x.content["score"], reverse=True)
 
 
+def _qa(query):
+
+    output, out = db.predict(
+        model_name='llm',
+        input=query,
+        context_select=chunk_collection.like(
+            Document({"_outputs.elements.chunk": query}),
+            vector_index="vector-index",
+            n=5,
+        ).find({}),
+        context_key='_outputs.elements.chunk.0.txt',
+    )
+    return output, out
+
+
 if st.session_state["authentication_status"]:
     [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
 
     with tab_text_search:
         query = st.text_input("---", placeholder="Search for something...")
-        submit_button = st.button("Search")
+        submit_button = st.button("Search", key='text_search')
         if submit_button:
             results = _vector_search(
                 k="_outputs.elements.chunk", v=query, index="vector-index", n=5
@@ -91,3 +107,21 @@ if st.session_state["authentication_status"]:
                 txt = chunk_data["txt"]
                 st.text(txt)
                 st.json(chunk_message)
+
+    with tab_qa_system:
+        query = st.text_input("---", placeholder="Ask a question...")
+        submit_button = st.button("Search", key='qa')
+        if submit_button:
+            output, out = _qa(query)
+            st.markdown(output.content)
+
+            page_messages = []
+            for source in sorted(out, key=lambda x:x.content['score'], reverse=True):
+                chunk_data = source.outputs('elements', 'chunk')
+                metadata = chunk_data['metadata']
+                page_number = metadata['page_number']
+                points = metadata['points']
+                score = source["score"]
+                page_messages.append( { "page_number": page_number, "points": points, "score": score } )
+            df = pd.DataFrame(page_messages)
+            st.table(df)
