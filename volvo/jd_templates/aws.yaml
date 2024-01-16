@@ -1,0 +1,344 @@
+params:
+  - instance_type
+  - name
+
+meta:
+  - project
+  - id
+  - subdir
+
+config:
+  ami: ami-0c7217cdde317cfec    # Ubuntu 20.04 official
+  iam_profile: default_instance_role
+  security_group: sg-0b99e5af030d80b31
+  bucket: superduperdb-demo
+  data_bucket: superduperdb-data
+  key: duncan
+  region: us-east-1
+  profile: default
+  user: ubuntu
+
+values:
+
+  ssh_prefix:
+    type: static
+    content: "ssh -i ~/.ssh/{{ config['key'] }}.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3"
+
+  host:
+    type: output/str
+    on_up: True
+    raises: False
+    content: |
+      #!/bin/bash
+      r=$(aws ec2 describe-instances \
+        --filter Name=tag:aws:cloudformation:stack-name,Values={{ params['name'] }} \
+        --region {{ config['region'] }} \
+        --profile {{ config['profile'] }})
+      echo $r | jq --raw-output .Reservations[].Instances[].PublicIpAddress
+
+  instance_id:
+    type: output/str
+    on_up: True
+    raises: False
+    content: |
+      #!/bin/bash
+      r=$(aws ec2 describe-instances \
+        --filter Name=tag:aws:cloudformation:stack-name,Values={{ params['name'] }} \
+        --region {{ config['region'] }} \
+        --profile {{ config['profile'] }})
+      echo $r | jq --raw-output .Reservations[].Instances[].InstanceId
+
+  exclude_string:
+    type: output/str
+    content: |
+      #!/usr/bin/python3
+      import os
+      with open('.syncignore') as f:
+          lines = f.read().split('\n')
+      for i, x in enumerate(lines):
+          if x.startswith('/'):
+              x = x[1:]
+          if os.path.isdir(x) or x == '.venv':
+              if x.endswith('/'):
+                  x = x[:-1]
+              x = x + '/*'
+          lines[i] = x
+      exclude_string = ' '.join(['--exclude ' + "'" + x + "'" for x in lines if x]) + ' '
+      print(exclude_string)
+
+builds:
+  sync_code:
+    type: script
+    whitelist:
+      - 256
+    content: |
+      #!/bin/bash
+      rsync -r \
+        --progress \
+        -e "{{ values['ssh_prefix'] }}" \
+        --exclude-from='./.syncignore' \
+        ./ \
+        {{ config['user'] }}@{{ values['host'] }}:~/{{ meta['project'] }}/
+
+  sync_file:
+    type: script
+    whitelist:
+      - 256
+    runtime:
+      file: None
+    content: |
+      #!/bin/bash
+
+      DIRECTORY=$(python -c "import os; print('/'.join('{{ runtime['file'] }}'.split('/')[:-1]))")
+      echo $DIRECTORY
+
+      {{ values['ssh_prefix'] }} {{ config['user'] }}@{{ values['host'] }} "mkdir -p {{ meta['project'] }}/$DIRECTORY"
+
+      rsync -r \
+        --progress \
+        -e "{{ values['ssh_prefix'] }}" \
+        {{ runtime['file'] }} \
+        {{ config['user'] }}@{{ values['host'] }}:~/{{ meta['project'] }}/$DIRECTORY/
+
+  ipython:
+    type: script
+    runtime:
+      shell: ipython
+    content: |
+      #!/bin/bash
+      if [[ {{ runtime['shell'] }} = ipython ]]
+      then
+        {{ values['ssh_prefix'] }} {{ config['user'] }}@{{ values['host'] }} \
+          -tty 'cd {{ meta['project'] }} && tmux new -s ipython "python3 -m IPython"
+      else
+        {{ values['ssh_prefix'] }} {{ config['user'] }}@{{ values['host'] }} \
+          -tty 'cd {{ meta['project'] }} && tmux new -s bash "/bin/bash"'
+      fi
+
+  session:
+    type: sequence
+    runtime:
+      shell: ipython
+    content:
+      - sync_code
+      - ipython
+
+  fetch_file:
+    type: script
+    runtime:
+      file: None
+    content: |
+      #!/bin/bash
+      DIRECTORY=$(python -c "import os; print('/'.join('{{ runtime['file'] }}'.split('/')[:-1]))")
+      echo $DIRECTORY
+
+      rsync -r \
+        --progress \
+        -e "{{ values['ssh_prefix'] }}" \
+        --exclude-from='./.syncignore' \
+        {{ config['user'] }}@{{ values['host'] }}:~/{{ meta['project'] }}/{{ runtime['file'] }} \
+        $DIRECTORY/
+
+  connect:
+    type: script
+    num_retries: 10
+    whitelist:
+      - 33280
+    runtime:
+      cd: False
+    content: |
+      #!/bin/bash
+      if [ {{ runtime['cd'] }} = True ]
+      then
+        {{ values['ssh_prefix'] }} {{ config['user'] }}@{{ values['host'] }} -tty \
+          'cd {{ meta['project'] }} && /bin/bash'
+      else
+        {{ values['ssh_prefix'] }} {{ config['user'] }}@{{ values['host'] }}
+      fi
+
+  watch_init:
+    type: script
+    num_retries: 5
+    whitelist:
+      - 65280
+    content: |
+      #!/bin/bash
+      {{ values['ssh_prefix'] }} {{ config['user'] }}@{{ values['host'] }} -tty 'tail -f -n25 /var/log/cloud-init-output.log'
+
+  user_data:     # file uses Jinja template to create file in `.jd/<id>/<name-of-function>`
+    type: file
+    content: |
+      #!/bin/bash
+
+      echo "GETTING PIP"
+      wget https://bootstrap.pypa.io/get-pip.py
+      python3 get-pip.py
+      cd /home/ubuntu
+
+      echo "INSTALLING AWSCLI"
+      apt install -y zip
+      curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+      unzip -qq awscliv2.zip
+      rm awscliv2.zip
+      ./aws/install
+
+      echo "INSTALLING superduperdb REQUIREMENTS"
+      git clone -b feat/pdf-encoder --single-branch --depth 1 https://github.com/jieguangzhou/superduperdb.git
+      cd superduperdb
+      pip install -e .[dev]
+      cd ..
+
+      echo "FETCHING CODE FROM BUCKET"
+      aws s3 sync s3://{{ config['bucket'] }}/{{ meta['project'] }} ./{{ meta['project'] }}
+      chmod -R 777 {{ meta['project'] }}
+      cd {{ meta['project'] }}
+
+      python3 -m pip install --no-cache-dir -r requirements.txt
+      python3 -m pip install ipython jupyter streamlit
+
+      echo "INSTALLING MONGODB"
+      curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+      echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+      apt-get update
+      wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      apt-get install gnupg
+      apt-get install -y mongodb-org
+      systemctl daemon-reload
+      systemctl start mongod
+
+      echo "GETTING DATA"
+      aws s3 sync s3://superduperdb-data/{{ meta['project'] }} ./data --region {{ config['region'] }}
+
+      if [ -d "data/dump" ]; then
+          echo "RESTORING MONGODB DUMP"
+          mongorestore data/dump
+      else
+          echo "data/dump" does not exist."
+      fi
+
+      echo "STARTING NOTEBOOK SERVER"
+      jupyter notebook --ip 0.0.0.0 --allow-root > nohup.out 2>&1 &
+
+      echo "STARTING STREAMLIT APP"
+      streamlit run app.py
+
+      
+
+  encode_user_data:
+    type: script
+    content: |
+      #!/usr/bin/python3
+      import os
+      lines = os.popen('base64 -i {{ meta['subdir'] }}/tasks/user_data').read().split('\n')
+      lines = ''.join(lines)
+      with open('{{ meta['subdir'] }}/tasks/user_data_encoded', 'w') as f:
+          f.write(lines)
+
+  create_stack:
+    type: script
+    content: |
+      #!/bin/bash
+      aws cloudformation create-stack \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --template-body file://cloudformation/instance_demand.yaml \
+        --stack-name {{ params['name'] }} \
+        --region {{ config['region'] }} \
+        --profile {{ config['profile'] }} \
+        --parameters \
+          ParameterKey=Key,ParameterValue={{ config['key'] }} \
+          ParameterKey=InstanceType,ParameterValue={{ params['instance_type'] }} \
+          ParameterKey=Ami,ParameterValue={{ config['ami'] }} \
+          ParameterKey=InstanceName,ParameterValue={{ params['name'] }} \
+          ParameterKey=IamProfile,ParameterValue={{ config['iam_profile'] }} \
+          ParameterKey=SecurityGroup,ParameterValue={{ config['security_group'] }} \
+          ParameterKey=UserData,ParameterValue=$(cat {{ meta['subdir'] }}/tasks/user_data_encoded)
+
+  notebook_url:
+    type: script
+    content: |
+      #!/usr/bin/python3
+      import os
+
+      cmd = "{{ values['ssh_prefix'] }} {{ config['user'] }}@{{ values['host'] }} -tty 'cd {{ meta['project'] }} && cat nohup.out'"
+      output = os.popen(cmd).read()
+
+      print(output.replace('localhost', '{{ values['host'] }}').replace('127.0.0.1', '{{ values['host'] }}'))
+    
+  jd_sync:
+    type: script
+    content: |
+      #!/bin/bash
+      rsync -r \
+        --progress ./\
+        -e "{{ values['ssh_prefix'] }}" \
+        .jd/ \
+        {{ config['user'] }}@{{ values['host'] }}:~/{{ meta['project'] }}/.jd
+
+  sync_data_to_bucket:
+    type: script
+    content: |
+      #!/bin/bash
+      aws s3 sync ./data s3://{{ config['data_bucket'] }}/{{ meta['project'] }} \
+        --region {{ config['region'] }}
+
+  sync_code_to_bucket:
+    type: script
+    content: |
+      #!/bin/bash
+      aws s3 rm s3://{{ config['bucket'] }}/{{ meta['project'] }} --recursive
+      aws s3 sync . s3://{{ config['bucket'] }}/{{ meta['project'] }} \
+        {{ values['exclude_string'] }} \
+        --region {{ config['region'] }}
+
+  up:      # can be any "start command"
+    type: sequence
+    content:
+      - user_data        # create file in `.jd/<id>
+      - encode_user_data
+      - sync_data_to_bucket
+      - sync_code_to_bucket
+      - create_stack
+
+  kill_stack:
+    type: script
+    content: |
+      aws cloudformation delete-stack \
+        --stack-name {{ params['name'] }} \
+        --region {{ config['region'] }} \
+        --profile {{ config['profile'] }}
+
+  down:        # stops everything (can be any commands)
+    type: sequence
+    content:
+      - kill_stack
+
+
+# all possible types:
+# - file    (create a file in `.jd/<id>/tasks/<function-name>`)
+# - script  (run this script with formatted variables)
+# - sequence    (run all of these scripts)
+
+# important files:
+# $project_root/jd_templates/*.yaml    (all possible actions)
+# $project_root/jd.json (all important data)
+# $project_root/.jd/*/tasks/*    (all created scripts/ files)
+
+# important variables
+# config - dictionary of important values same for all deployed version
+# meta - important meta-data common to all deployments with ai-deploy
+#    - id
+#    - subdir := `.jd/<id>/<
+#    - project := `os.getcwd().split('/')[-1]`
+# params - data specified at start of template deployment
+
+# How to use this template:
+# ```
+# jd build up --template=aws --params instance_type='t3.large',data=ecommerce,name=retail-with-data
+# ```
+
+# Then connect or do "anything" with the resource
+# E.g., connect:
+# jd build connect
+# jd build watch_init
+# jd build notebook_url

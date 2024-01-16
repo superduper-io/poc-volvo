@@ -1,0 +1,41 @@
+---
+  Parameters:
+    Key:
+      Type: AWS::EC2::KeyPair::KeyName
+    InstanceType:
+      Type: String
+    Ami:
+      Type: String
+    IamProfile:
+      Type: String
+    SecurityGroup:
+      Type: String
+    InstanceName:
+      Type: String
+    UserData:
+      Type: String
+  Resources:
+    TheInstance:
+      Type: AWS::EC2::Instance
+      Properties:
+        IamInstanceProfile:
+          Ref: IamProfile
+        ImageId:
+          Ref: Ami
+        InstanceType:
+          Ref: InstanceType
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 100
+        KeyName:
+          Ref: Key
+        SecurityGroupIds:
+          - Ref: SecurityGroup
+        Tags:
+          - Key: Name
+            Value:
+              Ref: InstanceName
+        UserData:
+          Ref: UserData
+  AWSTemplateFormatVersion: "2010-09-09"

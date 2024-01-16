@@ -1,0 +1,104 @@
+[
+  {
+    "params": {
+      "instance_type": "t3.large",
+      "name": "volvo-dry-run"
+    },
+    "config": {
+      "ami": "ami-0c7217cdde317cfec",
+      "iam_profile": "default_instance_role",
+      "security_group": "sg-0b99e5af030d80b31",
+      "bucket": "superduperdb-demo",
+      "data_bucket": "superduperdb-data",
+      "key": "duncan",
+      "region": "us-east-1",
+      "profile": "default",
+      "user": "ubuntu"
+    },
+    "created": "2024-01-16 12:49:18.977765",
+    "template": "aws",
+    "id": "UH1POOKH",
+    "commit_up": "3939e3d5ff58670ee901cdc8b504f78ad63e2bad",
+    "message_up": "Update volvo demo",
+    "jd_path": "jd.json",
+    "user": "dodo",
+    "subdir": ".jd/UH1POOKH",
+    "project": "volvo",
+    "values": {
+      "ssh_prefix": "ssh -i ~/.ssh/duncan.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3",
+      "exclude_string": "--exclude 'data/*' --exclude '.jd/*' --exclude 'jd_templates/*' --exclude '.git' ",
+      "host": "54.82.38.110",
+      "instance_id": "i-086aa59629741453a"
+    },
+    "stopped": "2024-01-16 12:55:11.255670",
+    "commit_down": "3939e3d5ff58670ee901cdc8b504f78ad63e2bad",
+    "message_down": "Update volvo demo"
+  },
+  {
+    "params": {
+      "instance_type": "t3.large",
+      "name": "volvo-dry-run-2"
+    },
+    "config": {
+      "ami": "ami-0c7217cdde317cfec",
+      "iam_profile": "default_instance_role",
+      "security_group": "sg-0b99e5af030d80b31",
+      "bucket": "superduperdb-demo",
+      "data_bucket": "superduperdb-data",
+      "key": "duncan",
+      "region": "us-east-1",
+      "profile": "default",
+      "user": "ubuntu"
+    },
+    "created": "2024-01-16 12:55:38.920501",
+    "template": "aws",
+    "id": "YGO48S7Y",
+    "commit_up": "3939e3d5ff58670ee901cdc8b504f78ad63e2bad",
+    "message_up": "Update volvo demo",
+    "jd_path": "jd.json",
+    "user": "dodo",
+    "subdir": ".jd/YGO48S7Y",
+    "project": "volvo",
+    "values": {
+      "ssh_prefix": "ssh -i ~/.ssh/duncan.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3",
+      "exclude_string": "--exclude 'data/*' --exclude '.jd/*' --exclude 'jd_templates/*' --exclude '.git' ",
+      "host": "3.81.41.216",
+      "instance_id": "i-000273ce46176d96d"
+    },
+    "stopped": "2024-01-16 13:19:09.896948",
+    "commit_down": "3939e3d5ff58670ee901cdc8b504f78ad63e2bad",
+    "message_down": "Update volvo demo"
+  },
+  {
+    "params": {
+      "instance_type": "t3.large",
+      "name": "volvo-dry-run-3"
+    },
+    "config": {
+      "ami": "ami-0c7217cdde317cfec",
+      "iam_profile": "default_instance_role",
+      "security_group": "sg-0b99e5af030d80b31",
+      "bucket": "superduperdb-demo",
+      "data_bucket": "superduperdb-data",
+      "key": "duncan",
+      "region": "us-east-1",
+      "profile": "default",
+      "user": "ubuntu"
+    },
+    "created": "2024-01-16 13:19:15.097668",
+    "template": "aws",
+    "id": "3NBNKH6R",
+    "commit_up": "3939e3d5ff58670ee901cdc8b504f78ad63e2bad",
+    "message_up": "Update volvo demo",
+    "jd_path": "jd.json",
+    "user": "dodo",
+    "subdir": ".jd/3NBNKH6R",
+    "project": "volvo",
+    "values": {
+      "ssh_prefix": "ssh -i ~/.ssh/duncan.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ServerAliveInterval=30 -o ServerAliveCountMax=3",
+      "exclude_string": "--exclude 'data/*' --exclude '.jd/*' --exclude 'jd_templates/*' --exclude '.git' ",
+      "host": "3.87.110.36",
+      "instance_id": "i-09eb45a5c411858e6"
+    }
+  }
+]
