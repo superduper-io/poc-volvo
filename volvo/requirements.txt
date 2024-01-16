@@ -1,0 +1,7 @@
+streamlit
+streamlit-authenticator
+unstructured[pdf]
+opencv-python-headless==4.8.0.74
+sentence-transformers
+# TODO: change to superduperdb repo after the PR is merged
+superduperdb git+https://github.com/jieguangzhou/superduperdb.git@feat/pdf-encoder
