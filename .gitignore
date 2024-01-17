@@ -158,7 +158,7 @@ dmypy.json
 /models
 
 # Meta
-/.jd
+.jd/
 /.syncignore
 /supervisord.conf
 /cloudformation
