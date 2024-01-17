@@ -1,5 +1,7 @@
 # Volvo With SuperDuperDB
 
+Place all pdfs that need to be processed in the pdf-folders folder
+
 ## Manual start
 
 ### Environment
@@ -47,5 +49,9 @@ streamlit run app.py
 Install a deploy framework
 
 ```bash
-pip install ai-jobdeploy
+pip install ai-jobdeploy awscli
+```
+
+```
+jd build up --template=aws --params instance_type='g4dn.xlarge',name=volvo-demo-vector-search-10008
 ```

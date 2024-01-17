@@ -73,12 +73,18 @@ def add_chunk_model(db):
 def add_vector_search_model(db):
     chunk_collection = Collection("_outputs.elements.chunk")
 
+    def preprocess(x):
+        if isinstance(x, dict):
+            # For model chains, the logic of this key needs to be optimized.
+            return x["0"]["txt"]
+        return x
+
     model = Model(
         identifier=MODEL_IDENTIFIER_embedding,
         object=sentence_transformers.SentenceTransformer("BAAI/bge-large-en-v1.5"),
         encoder=vector(shape=(384,)),
         predict_method="encode",  # Specify the prediction method
-        preprocess=lambda x: x["0"]["txt"] if isinstance(x, dict) else x,
+        preprocess=preprocess,
         postprocess=lambda x: x.tolist(),  # Define postprocessing function
         batch_predict=True,  # Generate predictions for a set of observations all at once
     )
@@ -99,7 +105,6 @@ def add_vector_search_model(db):
 
 
 def vector_search(db, query, top_k=5):
-    query = "Reduced wheel brake usage"
     collection = Collection(COLLECTION_NAME_CHUNK)
     out = db.execute(
         collection.like(
@@ -155,12 +160,24 @@ def qa(db, query, vector_search_top_k=5):
     return output, out
 
 
+def generate_questions(db):
+    # TODO: Generate questions for showing in the frontend
+    datas = []
+    elements = list(db.execute(Collection(COLLECTION_NAME_SOURCE).find({})))[0][
+        SOURCE_KEY
+    ]
+    text = "\n".join([e.text for e in elements])
+    return text
+
+
 def build():
+    # TODO: Support more configurations for building the database
     db = init_db()
     save_pdfs(db, "pdf-folders")
     add_chunk_model(db)
     add_vector_search_model(db)
     add_llm_model(db, use_openai=os.getenv("USE_OPENAI").upper() == "TRUE")
+
 
 if __name__ == "__main__":
     build()

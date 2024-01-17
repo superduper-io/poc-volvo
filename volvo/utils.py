@@ -74,11 +74,8 @@ def merge_metadatas(metadatas, return_center=False):
         p4 = (max(p4[0], p4_[0]), min(p4[1], p4_[1]))
     points = (p1, p2, p3, p4)
     if return_center:
-        points = (
-            (p1[0] + p3[0]) / 2,
-            (p1[1] + p3[1]) / 2,
-        )
-    page_number = metadata["page_number"]
+        points = {"x": (p1[0] + p3[0]) / 2, "y": (p1[1] + p3[1]) / 2}
+        page_number = metadata["page_number"]
     return {"points": points, "page_number": page_number}
 
 
@@ -89,7 +86,9 @@ def create_chunk_and_metadatas(page_elements, stride=3, window=10):
         windown_elements = page_elements[i : i + window]
         metadatas = [e.metadata.to_dict() for e in windown_elements]
         chunk = "\n".join([e.text for e in windown_elements])
-        datas.append({"txt": chunk, "metadata": merge_metadatas(metadatas, return_center=True)})
+        datas.append(
+            {"txt": chunk, "metadata": merge_metadatas(metadatas, return_center=True)}
+        )
     return datas
 
 

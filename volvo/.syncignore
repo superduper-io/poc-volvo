@@ -3,3 +3,4 @@
 /jd_templates
 /.git
 /env
+/__pycache__

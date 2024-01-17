@@ -8,7 +8,7 @@ meta:
   - subdir
 
 config:
-  ami: ami-0c7217cdde317cfec    # Ubuntu 20.04 official iam_profile: default_instance_role
+  ami: ami-0a8dada81f29ad054    # Ubuntu 20.04 official iam_profile: default_instance_role
   security_group: sg-0b99e5af030d80b31
   bucket: superduperdb-demo
   data_bucket: superduperdb-data
@@ -169,14 +169,33 @@ builds:
     type: file
     content: |
       #!/bin/bash
+      set -e
 
-      echo "GETTING PIP"
-      wget https://bootstrap.pypa.io/get-pip.py
-      python3 get-pip.py
+      echo "INSTALLING MONGODB"
+      curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+      echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+      apt-get update
+      wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+      apt --fix-broken install -y
+      apt-get install gnupg
+      apt-get install -y mongodb-org
+      systemctl daemon-reload
+      systemctl start mongod
+
+      echo "INSTALLING python3.10"
+      add-apt-repository ppa:deadsnakes/ppa
+      apt update
+      apt install -y python3.10
+
       cd /home/ubuntu
+
+      virtualenv -p /usr/bin/python3.10 env
+      source env/bin/activate
 
       echo "INSTALLING AWSCLI"
       apt install -y zip
+      apt install -y libgl1
       curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
       unzip -qq awscliv2.zip
       rm awscliv2.zip
@@ -189,36 +208,29 @@ builds:
       cd ..
 
       echo "FETCHING CODE FROM BUCKET"
-      aws s3 sync s3://{{ config['bucket'] }}/{{ meta['project'] }} ./{{ meta['project'] }}
-      chmod -R 777 {{ meta['project'] }}
-      cd {{ meta['project'] }}
+      aws s3 sync s3://superduperdb-demo/volvo ./volvo
+      chmod -R 777 volvo
+      cd volvo
 
-      python3 -m pip install --no-cache-dir -r requirements.txt
-      python3 -m pip install ipython jupyter streamlit cryptography==38.0.1
+      pip install --no-cache-dir -r requirements.txt
+      pip install ipython jupyter streamlit cryptography==38.0.1
 
-      echo "INSTALLING MONGODB"
-      curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-      echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
-      apt-get update
-      wget http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
-      sudo dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
-      apt-get install gnupg
-      apt-get install -y mongodb-org
-      systemctl daemon-reload
-      systemctl start mongod
 
-      echo "GETTING DATA"
-      aws s3 sync s3://superduperdb-data/{{ meta['project'] }} ./data --region {{ config['region'] }}
+      # echo "GETTING DATA"
+      # aws s3 sync s3://superduperdb-data/volvo ./data --region us-east-1
 
-      if [ -d "data/dump" ]; then
-          echo "RESTORING MONGODB DUMP"
-          mongorestore data/dump
-      else
-          echo "data/dump does not exist."
-      fi
+      # if [ -d "data/dump" ]; then
+      #     echo "RESTORING MONGODB DUMP"
+      #     mongorestore data/dump
+      # else
+      #     echo "data/dump does not exist."
+      # fi
 
       echo "STARTING NOTEBOOK SERVER"
       jupyter notebook --ip 0.0.0.0 --allow-root > nohup.out 2>&1 &
+
+      echo "Building APP .... "
+      python sddb.py
 
       echo "STARTING STREAMLIT APP"
       streamlit run app.py

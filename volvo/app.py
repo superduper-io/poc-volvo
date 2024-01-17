@@ -37,12 +37,15 @@ if st.sidebar.button("Login"):
         st.session_state["authentication_status"] = False
         st.sidebar.error("Incorrect Username/Password")
 
+@st.cache_resource
+def _init():
+   return init_db()
 
 st.title("Volvo with SuperDuperDB")
 
-db = init_db()
+db = _init()
 
-if st.session_state["authentication_status"] or True:
+if st.session_state["authentication_status"]:
     [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
 
     with tab_text_search:
