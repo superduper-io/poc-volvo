@@ -2,7 +2,7 @@
 
 Place all pdfs that need to be processed in the pdf-folders folder
 
-## Manual start
+## Manual Start
 
 ### Environment
 - python>=3.10
@@ -12,7 +12,9 @@ Place all pdfs that need to be processed in the pdf-folders folder
 pip install -r requirements.txt
 ```
 
-### Use OpenAI
+### LLM Model
+
+#### Use OpenAI
 
 ```
 pip install openai
@@ -24,26 +26,26 @@ Change .env
 USE_OPENAI=TRUE
 ```
 
-### Use OpenSource model
+#### Use OpenSource model
 
 ```bash
 pip install vllm
 ```
 
-## Data preparation
+### Data preparation
 
 ```
 python build.py
 ```
 
 
-## Start streamlit app
+### Start Streamlit app
 ```bash
 streamlit run app.py
 ```
 
 
-## Automatically deploy to aws
+## Automatically Deploy To AWS
 
 
 Install a deploy framework
