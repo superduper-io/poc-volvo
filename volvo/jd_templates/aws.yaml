@@ -231,7 +231,7 @@ builds:
       jupyter notebook --ip 0.0.0.0 --allow-root > nohup.out 2>&1 &
 
       echo "Building APP .... "
-      python sddb.py
+      python sddb.py --init
 
       echo "STARTING STREAMLIT APP"
       streamlit run app.py
