@@ -1,8 +1,13 @@
 import hashlib
+import os
 
 import pandas as pd
 import streamlit as st
-from sddb import vector_search, qa, init_db
+from dotenv import load_dotenv
+
+from sddb import init_db, load_questions, qa, vector_search
+
+load_dotenv()
 
 
 # Function to generate a hash of the password
@@ -37,16 +42,18 @@ if st.sidebar.button("Login"):
         st.session_state["authentication_status"] = False
         st.sidebar.error("Incorrect Username/Password")
 
-@st.cache_resource
-def _init():
-   return init_db()
+st.title(os.environ.get("TITLE", "SuperDuperDB"))
 
-st.title("Volvo with SuperDuperDB")
-
-db = _init()
+db = st.cache_resource(init_db)()
+questions = st.cache_resource(load_questions)()
 
 if st.session_state["authentication_status"]:
-    [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
+    if questions:
+        [tab_text_search, tab_qa_system, tab_questions] = st.tabs(
+            ["Text Search", "QA System", "Candidate Questions"]
+        )
+    else:
+        [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
 
     with tab_text_search:
         query = st.text_input("---", placeholder="Search for something...")
@@ -72,7 +79,7 @@ if st.session_state["authentication_status"]:
             st.markdown(output.content)
 
             page_messages = []
-            for source in sorted(out, key=lambda x: x.content["score"], reverse=True):
+            for source in out:
                 chunk_data = source.outputs("elements", "chunk")
                 metadata = chunk_data["metadata"]
                 page_number = metadata["page_number"]
@@ -85,3 +92,8 @@ if st.session_state["authentication_status"]:
             st.table(df)
     query = "Reduced wheel brake usage"
     out = vector_search(db, query)
+
+    if questions:
+        question_text = "\n\n".join(questions)
+        with tab_questions:
+            st.markdown(question_text)

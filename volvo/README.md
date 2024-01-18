@@ -35,7 +35,7 @@ pip install vllm
 ### Data preparation
 
 ```
-python build.py
+python sddb.py --init
 ```
 
 
@@ -55,5 +55,5 @@ pip install ai-jobdeploy awscli
 ```
 
 ```
-jd build up --template=aws --params instance_type='g4dn.xlarge',name=volvo-demo-vector-search-10008
+jd build up --template=aws --params instance_type='g4dn.xlarge',name=volvo-demo-vector-search
 ```

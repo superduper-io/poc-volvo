@@ -5,4 +5,4 @@ opencv-python-headless==4.8.0.74
 sentence-transformers
 git+https://github.com/SuperDuperDB/superduperdb@main#egg=superduperdb
 python-dotenv
-vllm
+click

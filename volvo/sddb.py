@@ -1,4 +1,5 @@
 import os
+import click
 
 import sentence_transformers
 from dotenv import load_dotenv
@@ -22,7 +23,7 @@ SOURCE_KEY = "elements"
 COLLECTION_NAME_SOURCE = "source"
 
 MODEL_IDENTIFIER_CHUNK = "chunk"
-MODEL_IDENTIFIER_embedding = "embedding"
+MODEL_IDENTIFIER_EMBEDDING = "embedding"
 MODEL_IDENTIFIER_LLM = "llm"
 VECTOR_INDEX_IDENTIFIER = "vector-index"
 
@@ -30,9 +31,9 @@ COLLECTION_NAME_CHUNK = f"_outputs.{SOURCE_KEY}.{MODEL_IDENTIFIER_CHUNK}"
 CHUNK_OUTPUT_KEY = f"_outputs.{SOURCE_KEY}.{MODEL_IDENTIFIER_CHUNK}"
 
 
-def init_db(db_name="volvo"):
-    mongodb_uri = os.getenv("MONGODB_URI").rstrip("/") + "/" + db_name
-    artifact_store = os.getenv("ARTIFACT_STORE")
+def init_db():
+    mongodb_uri = os.getenv("MONGODB_URI", "superduperdb-demo")
+    artifact_store = os.getenv("ARTIFACT_STORE", "data/artifact_store")
 
     db = superduper(mongodb_uri, artifact_store=f"filesystem://{artifact_store}")
     return db
@@ -63,7 +64,7 @@ def add_chunk_model(db):
 
     db.add(
         Listener(
-            model=chunk_model,  # Assuming video2images is your SuperDuperDB model
+            model=chunk_model,
             select=Collection(COLLECTION_NAME_SOURCE).find(),
             key="elements",
         )
@@ -76,29 +77,28 @@ def add_vector_search_model(db):
     def preprocess(x):
         if isinstance(x, dict):
             # For model chains, the logic of this key needs to be optimized.
-            return x["0"]["txt"]
+            chunk = sorted(x.items())[-1][1]
+            return chunk["txt"]
         return x
 
     model = Model(
-        identifier=MODEL_IDENTIFIER_embedding,
+        identifier=MODEL_IDENTIFIER_EMBEDDING,
         object=sentence_transformers.SentenceTransformer("BAAI/bge-large-en-v1.5"),
         encoder=vector(shape=(384,)),
-        predict_method="encode",  # Specify the prediction method
+        predict_method="encode",
         preprocess=preprocess,
-        postprocess=lambda x: x.tolist(),  # Define postprocessing function
-        batch_predict=True,  # Generate predictions for a set of observations all at once
+        postprocess=lambda x: x.tolist(),
+        batch_predict=True,
     )
 
     db.add(
         VectorIndex(
-            # Use a dynamic identifier based on the model's identifier
             identifier=VECTOR_INDEX_IDENTIFIER,
-            # Specify an indexing listener with MongoDB collection and model
             indexing_listener=Listener(
                 select=chunk_collection.find(),
                 key=CHUNK_OUTPUT_KEY,  # Key for the documents
                 model=model,  # Specify the model for processing
-                predict_kwargs={"max_chunk_size": 1000},
+                predict_kwargs={"max_chunk_size": 64},
             ),
         )
     )
@@ -113,6 +113,8 @@ def vector_search(db, query, top_k=5):
             n=top_k,
         ).find({})
     )
+    if out:
+        out = sorted(out, key=lambda x: x.content["score"], reverse=True)
     return out
 
 
@@ -157,20 +159,92 @@ def qa(db, query, vector_search_top_k=5):
         ).find({}),
         context_key=f"{CHUNK_OUTPUT_KEY}.0.txt",
     )
+    if out:
+        out = sorted(out, key=lambda x: x.content["score"], reverse=True)
     return output, out
 
 
-def generate_questions(db):
+def generate_questions_from_db(n=20):
     # TODO: Generate questions for showing in the frontend
+    db = init_db()
     datas = []
-    elements = list(db.execute(Collection(COLLECTION_NAME_SOURCE).find({})))[0][
-        SOURCE_KEY
-    ]
-    text = "\n".join([e.text for e in elements])
-    return text
+
+    llm = db.load("model", MODEL_IDENTIFIER_LLM)
+    chunks = list(
+        db.execute(
+            Collection(COLLECTION_NAME_CHUNK).find({}, {"_id": 1, CHUNK_OUTPUT_KEY: 1})
+        )
+    )
+    generate_template = """
+Based on the information provided, please formulate one question related to the document excerpt. Answer in JSON format.
+
+**Context**:
+{%s}
+
+Using the information above, generate your questions. Your question can be one of the following types: What, Why, When, Where, Who, How. Please respond in the following format:
+
+```json
+{
+  \"question_type\": \"Type of question, e.g., 'What'\",
+  \"question\": \"Your question \",
+}
+```
+"""
+    # reset the prompt function
+    llm.prompt_func = lambda x: generate_template % x
+    datas = []
+    import random
+
+    for chunk in chunks:
+        text = chunk.outputs("elements", "chunk")["txt"]
+        id_ = chunk["_id"]
+        datas.append({"id": id_, "text": text})
+
+    random.shuffle(datas)
+    questions = []
+    for data in datas[: n * 5]:
+        text = data["text"]
+        try:
+            result = llm.predict(text)
+            print(result)
+            json_result = eval(result)
+            # keep the id
+            questions.append(
+                {
+                    "id": str(data["id"]),
+                    "question": json_result["question"],
+                }
+            )
+        except Exception as e:
+            print(e)
+            continue
+
+        if len(questions) >= n:
+            break
+
+    for q in questions:
+        print(q["question"])
+
+    question_path = os.environ.get("CANDIDATE_QUESTIONS", "questions.txt")
+    print(f"save question list to {question_path}")
+    with open(question_path, "w") as f:
+        for q in questions:
+            f.write(q["question"] + "\n")
+
+    return questions
 
 
-def build():
+def load_questions():
+    question_path = os.environ.get("CANDIDATE_QUESTIONS", "questions.txt")
+    if not os.path.exists(question_path):
+        return []
+    with open(question_path, "r") as f:
+        questions = f.readlines()
+    return questions
+
+
+def setup_db():
+    init_db()
     # TODO: Support more configurations for building the database
     db = init_db()
     save_pdfs(db, "pdf-folders")
@@ -179,5 +253,25 @@ def build():
     add_llm_model(db, use_openai=os.getenv("USE_OPENAI").upper() == "TRUE")
 
 
+@click.command()
+@click.option(
+    "--init",
+    is_flag=True,
+    default=False,
+    help="Build the database",
+)
+@click.option(
+    "--questions_num",
+    default=0,
+    type=int,
+    help="number of questions to generate",
+)
+def main(init, questions_num):
+    if init:
+        setup_db()
+    if questions_num:
+        generate_questions_from_db(n=questions_num)
+
+
 if __name__ == "__main__":
-    build()
+    main()
