@@ -13,6 +13,7 @@ from superduperdb import (
     vector,
 )
 from superduperdb.backends.mongodb import Collection
+from superduperdb import logging
 
 from utils import get_chunks
 
@@ -105,6 +106,7 @@ def add_vector_search_model(db):
 
 
 def vector_search(db, query, top_k=5):
+    logging.info(f"Vector search query: {query}")
     collection = Collection(COLLECTION_NAME_CHUNK)
     out = db.execute(
         collection.like(
@@ -148,6 +150,7 @@ def add_llm_model(db, use_openai=False):
 
 
 def qa(db, query, vector_search_top_k=5):
+    logging.info(f"QA query: {query}")
     collection = Collection(COLLECTION_NAME_CHUNK)
     output, out = db.predict(
         model_name=MODEL_IDENTIFIER_LLM,

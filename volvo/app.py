@@ -47,53 +47,78 @@ st.title(os.environ.get("TITLE", "SuperDuperDB"))
 db = st.cache_resource(init_db)()
 questions = st.cache_resource(load_questions)()
 
-if st.session_state["authentication_status"]:
-    if questions:
-        [tab_text_search, tab_qa_system, tab_questions] = st.tabs(
-            ["Text Search", "QA System", "Candidate Questions"]
+
+def get_user_input(input_mode, input_key, questions):
+    """
+    A function to get user input based on the input mode
+    """
+    if input_mode == "Text Input":
+        return st.text_input(
+            "Enter your text", placeholder="Type here...", key=input_key
         )
-    else:
-        [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
+    else:  # Question Selection
+        return st.selectbox("Choose a question:", questions, key=input_key)
+
+
+def convert_contexts2df(contexts):
+    """
+    Convert contexts to a dataframe
+    """
+    page_messages = []
+    for source in contexts:
+        chunk_data = source.outputs("elements", "chunk")
+        metadata = chunk_data["metadata"]
+        page_number = metadata["page_number"]
+        score = source["score"]
+        page_messages.append(
+            {
+                "page_number": page_number,
+                "score": score,
+                "text": chunk_data["txt"],
+            }
+        )
+    df = pd.DataFrame(page_messages)
+    return df
+
+
+if st.session_state["authentication_status"]:
+    [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
 
     with tab_text_search:
-        query = st.text_input("---", placeholder="Search for something...")
+        search_mode = st.radio(
+            "Choose your search mode:",
+            ["Question Selection", "Text Input"],
+            key="search_mode",
+            horizontal=True,
+        )
+        query = get_user_input(search_mode, "text_search_query", questions)
+
         submit_button = st.button("Search", key="text_search")
         if submit_button:
+            st.markdown("#### Query")
+            st.markdown(query)
             results = vector_search(db, query, top_k=5)
-            for r in results:
-                score = r.content["score"]
-                chunk_data = r.outputs("elements", "chunk")
-                metadata = chunk_data["metadata"]
-                chunk_message = {}
-                chunk_message["score"] = score
-                chunk_message["metadata"] = metadata
-                txt = chunk_data["txt"]
-                st.text(txt)
-                st.json(chunk_message)
+            df = convert_contexts2df(results)
+            st.markdown("#### Related Documents:")
+            st.table(df)
 
     with tab_qa_system:
-        query = st.text_input("---", placeholder="Ask a question...")
+        qa_mode = st.radio(
+            "Choose your input mode:",
+            ["Question Selection", "Text Input"],
+            key="qa_mode",
+            horizontal=True,
+        )
+        query = get_user_input(qa_mode, "qa_query", questions)
+
         submit_button = st.button("Search", key="qa")
         if submit_button:
+            st.markdown("#### Query")
+            st.markdown(query)
             output, out = qa(db, query, vector_search_top_k=5)
+            st.markdown("#### Answer:")
             st.markdown(output.content)
 
-            page_messages = []
-            for source in out:
-                chunk_data = source.outputs("elements", "chunk")
-                metadata = chunk_data["metadata"]
-                page_number = metadata["page_number"]
-                points = metadata["points"]
-                score = source["score"]
-                page_messages.append(
-                    {"page_number": page_number, "points": points, "score": score}
-                )
-            df = pd.DataFrame(page_messages)
+            df = convert_contexts2df(out)
+            st.markdown("#### Related Documents:")
             st.table(df)
-    query = "Reduced wheel brake usage"
-    out = vector_search(db, query)
-
-    if questions:
-        question_text = "\n\n".join(questions)
-        with tab_questions:
-            st.markdown(question_text)
