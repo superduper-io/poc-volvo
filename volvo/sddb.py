@@ -43,15 +43,29 @@ def init_db():
 def save_pdfs(db, pdf_folder):
     from superduperdb import Document
     from superduperdb.ext.unstructured.encoder import unstructured_encoder
+    from pdf2image import convert_from_path
 
     db.add(unstructured_encoder)
 
-    pdf_paths = [os.path.join(pdf_folder, pdf) for pdf in os.listdir(pdf_folder)]
+    pdf_names = [pdf for pdf in os.listdir(pdf_folder) if pdf.endswith(".pdf")]
+
+    pdf_paths = [os.path.join(pdf_folder, pdf) for pdf in pdf_names]
     collection = Collection(COLLECTION_NAME_SOURCE)
     to_insert = [
         Document({"elements": unstructured_encoder(pdf_path)}) for pdf_path in pdf_paths
     ]
     db.execute(collection.insert_many(to_insert))
+
+    image_folders = os.environ.get("IMAGES_FOLDER", "data/pdf-images")
+    for pdf_name in pdf_names:
+        pdf_path = os.path.join(pdf_folder, pdf_name)
+        images = convert_from_path(pdf_path)
+        image_folder = os.path.join(image_folders, pdf_name)
+        if not os.path.exists(image_folder):
+            os.makedirs(image_folder)
+
+        for i, image in enumerate(images):
+            image.save(os.path.join(image_folder, f"{i}.jpg"))
 
 
 def add_chunk_model(db):

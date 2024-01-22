@@ -1,3 +1,10 @@
+import os
+from logging import getLogger
+
+
+logger = getLogger(__name__)
+
+
 def remove_sidebars(elements):
     from unstructured.documents.elements import ElementType
     from collections import defaultdict
@@ -61,44 +68,35 @@ def remove_annotation(elements):
     return elements
 
 
-def merge_metadatas(metadatas, return_center=False):
-    MAX_NUM = 999999999
-    if not metadatas:
-        return {}
-    p1, p2, p3, p4 = (MAX_NUM, MAX_NUM), (MAX_NUM, 0), (0, 0), (0, MAX_NUM)
-    for metadata in metadatas:
-        p1_, p2_, p3_, p4_ = metadata["coordinates"]["points"]
-        p1 = (min(p1[0], p1_[0]), min(p1[1], p1_[1]))
-        p2 = (min(p2[0], p2_[0]), max(p2[1], p2_[1]))
-        p3 = (max(p3[0], p3_[0]), max(p3[1], p3_[1]))
-        p4 = (max(p4[0], p4_[0]), min(p4[1], p4_[1]))
-    points = (p1, p2, p3, p4)
-    if return_center:
-        points = {"x": (p1[0] + p3[0]) / 2, "y": (p1[1] + p3[1]) / 2}
-        page_number = metadata["page_number"]
-    return {"points": points, "page_number": page_number}
-
-
 def create_chunk_and_metadatas(page_elements, stride=3, window=10):
     page_elements = remove_sidebars(page_elements)
+    for index, page_element in enumerate(page_elements):
+        page_element.metadata.num = index
     datas = []
     for i in range(0, len(page_elements), stride):
         windown_elements = page_elements[i : i + window]
-        metadatas = [e.metadata.to_dict() for e in windown_elements]
         chunk = "\n".join([e.text for e in windown_elements])
+        source_elements = [e.to_dict() for e in windown_elements]
         datas.append(
-            {"txt": chunk, "metadata": merge_metadatas(metadatas, return_center=True)}
+            {
+                "txt": chunk,
+                "source_elements": source_elements,
+            }
         )
     return datas
 
 
 def get_chunks(elements):
     from collections import defaultdict
+    from unstructured.documents.coordinates import RelativeCoordinateSystem
 
     elements = remove_annotation(elements)
 
     pages_elements = defaultdict(list)
     for element in elements:
+        element.convert_coordinates_to_new_system(
+            RelativeCoordinateSystem(), in_place=True
+        )
         pages_elements[element.metadata.page_number].append(element)
 
     all_chunks_and_links = sum(
@@ -109,3 +107,158 @@ def get_chunks(elements):
         [],
     )
     return all_chunks_and_links
+
+
+def rematch(texts, answer, threshold=0.1):
+    print(texts)
+    texts_words = [set(t.split()) for t in texts]
+    answer_words = set(answer.split())
+    scores = [len(t & answer_words) / len(answer_words) for t in texts_words]
+    print(scores)
+    scores = [s if s > threshold else 0 for s in scores]
+    print(scores)
+    max_score = max(scores)
+    max_index = scores.index(max_score)
+    # Find the first non-zero score before the max score
+    start = max_index
+    for i in range(max_index - 1, -1, -1):
+        if scores[i] == 0:
+            break
+        start = i
+
+    # Find the first non-zero score after the max score
+    end = max_index + 1
+    for i in range(max_index + 1, len(scores)):
+        if scores[i] == 0:
+            break
+        end = i + 1
+
+    print(start, end)
+    return start, end
+
+
+def merge_metadatas(metadatas):
+    if not metadatas:
+        return {}
+    metadata = metadatas[0]
+    p1, p2, p3, p4 = metadata["coordinates"]["points"]
+    corrdinate = [p1, p3]
+    coordinates = [corrdinate]
+    for metadata in metadatas[1:]:
+        p1_, p2_, p3_, p4_ = metadata["coordinates"]["points"]
+        if p2_[0] > p3[0]:
+            corrdinate = [p1_, p3_]
+            coordinates.append(corrdinate)
+            p1, p2, p3, p4 = p1_, p2_, p3_, p4_
+            continue
+        p1 = (min(p1[0], p1_[0]), max(p1[1], p1_[1]))
+        p2 = (min(p2[0], p2_[0]), max(p2[1], p2_[1]))
+        p3 = (max(p3[0], p3_[0]), min(p3[1], p3_[1]))
+        p4 = (max(p4[0], p4_[0]), min(p4[1], p4_[1]))
+        corrdinate[0] = p1
+        corrdinate[1] = p3
+
+    print(coordinates)
+    page_number = metadata["page_number"]
+    file_name = metadata["filename"]
+    return {
+        "file_name": file_name,
+        "page_number": page_number,
+        "coordinates": coordinates,
+    }
+
+
+def get_related_documents(contexts, match_text=None, filter_threshold=0.5):
+    """
+    Convert contexts to a dataframe
+    """
+    image_folder = os.environ.get("IMAGES_FOLDER", None)
+    for source in contexts:
+        chunk_data = source.outputs("elements", "chunk")
+        source_elements = chunk_data["source_elements"]
+        if match_text:
+            start, end = rematch(
+                [e["text"] for e in source_elements], match_text, filter_threshold
+            )
+            source_elements = source_elements[start:end]
+        metadata = merge_metadatas([e["metadata"] for e in source_elements])
+        page_number = metadata["page_number"]
+        file_name = metadata["file_name"]
+        coordinates = metadata["coordinates"]
+        file_path = os.path.join(image_folder, file_name, f"{page_number-1}.jpg")
+        if os.path.exists(file_path):
+            img = draw_rectangle_and_display(file_path, coordinates)
+        else:
+            img = None
+        score = round(source["score"], 2)
+        text = f"**file_name**: {file_name}\n\n**score**: {score}\n\n**text:**\n\n{chunk_data['txt']}"
+        yield text, img
+
+
+def groupby_source_elements(contexts):
+    """
+    Group pages for all contexts
+    """
+    from collections import defaultdict
+
+    # Save the max score for each page
+    page2score = defaultdict(list)
+    page_elements = defaultdict(list)
+    for source in contexts:
+        chunk_data = source.outputs("elements", "chunk")
+        source_elements = chunk_data["source_elements"]
+        for element in source_elements:
+            page_number = element["metadata"]["page_number"]
+            page_elements[page_number].append(element)
+
+    # Deduplicate elements in the page based on the num field
+    for page_number, elements in page_elements.items():
+        page_elements[page_number] = list(
+            {e["metadata"]["num"]: e for e in elements}.values()
+        )
+        # Sort elements by num
+        page_elements[page_number].sort(key=lambda e: e["metadata"]["num"])
+
+    return page_elements
+
+
+def draw_rectangle_and_display(image_path, relative_coordinates, expand=0.005):
+    """
+    Draw a rectangle on an image based on relative coordinates with the origin at the bottom-left
+    and display it in Jupyter Notebook.
+
+    :param image_path: Path to the original image.
+    :param relative_coordinates: A list of (left, bottom, right, top) coordinates as a ratio of the image size.
+    """
+    from PIL import Image, ImageDraw
+
+    with Image.open(image_path) as img:
+        width, height = img.size
+        draw = ImageDraw.Draw(img)
+
+        # Convert relative coordinates to absolute pixel coordinates
+        #
+        for relative_coordinate in relative_coordinates:
+            (left, top), (right, bottom) = relative_coordinate
+            absolute_coordinates = (
+                int(left * width),  # Left
+                height - int(top * height),  # Top (inverted)
+                int(right * width),  # Right
+                height - int(bottom * height),  # Bottom (inverted)
+            )
+
+            if expand:
+                absolute_coordinates = (
+                    absolute_coordinates[0] - expand * width,
+                    absolute_coordinates[1] - expand * height,
+                    absolute_coordinates[2] + expand * width,
+                    absolute_coordinates[3] + expand * height,
+                )
+
+            try:
+                draw.rectangle(absolute_coordinates, outline="red", width=3)
+            except Exception as e:
+                logger.warn(
+                    f"Failed to draw rectangle on image: {e}\nCoordinates: {absolute_coordinates}"
+                )
+        return img

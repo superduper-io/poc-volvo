@@ -6,6 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from sddb import init_db, load_questions, qa, vector_search
+from utils import get_related_documents
 
 load_dotenv()
 
@@ -60,28 +61,7 @@ def get_user_input(input_mode, input_key, questions):
         return st.selectbox("Choose a question:", questions, key=input_key)
 
 
-def convert_contexts2df(contexts):
-    """
-    Convert contexts to a dataframe
-    """
-    page_messages = []
-    for source in contexts:
-        chunk_data = source.outputs("elements", "chunk")
-        metadata = chunk_data["metadata"]
-        page_number = metadata["page_number"]
-        score = source["score"]
-        page_messages.append(
-            {
-                "page_number": page_number,
-                "score": score,
-                "text": chunk_data["txt"],
-            }
-        )
-    df = pd.DataFrame(page_messages)
-    return df
-
-
-if st.session_state["authentication_status"]:
+if st.session_state["authentication_status"] or True:
     [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
 
     with tab_text_search:
@@ -98,9 +78,12 @@ if st.session_state["authentication_status"]:
             st.markdown("#### Query")
             st.markdown(query)
             results = vector_search(db, query, top_k=5)
-            df = convert_contexts2df(results)
             st.markdown("#### Related Documents:")
-            st.table(df)
+            for text, img in get_related_documents(results):
+                text = text.replace('\n', '<br>')
+                st.markdown(text)
+                if img:
+                    st.image(img)
 
     with tab_qa_system:
         qa_mode = st.radio(
@@ -119,6 +102,9 @@ if st.session_state["authentication_status"]:
             st.markdown("#### Answer:")
             st.markdown(output.content)
 
-            df = convert_contexts2df(out)
             st.markdown("#### Related Documents:")
-            st.table(df)
+            for text, img in get_related_documents(out, output.content):
+                text = text.replace('\n', '<br>')
+                st.markdown(text)
+                if img:
+                    st.image(img)
