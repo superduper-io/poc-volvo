@@ -109,31 +109,31 @@ def get_chunks(elements):
     return all_chunks_and_links
 
 
-def rematch(texts, answer, threshold=0.1):
-    print(texts)
+def rematch(texts, answer, threshold=0.0):
     texts_words = [set(t.split()) for t in texts]
     answer_words = set(answer.split())
     scores = [len(t & answer_words) / len(answer_words) for t in texts_words]
-    print(scores)
-    scores = [s if s > threshold else 0 for s in scores]
-    print(scores)
     max_score = max(scores)
+    # make sure the threshold is not larger than the max score, otherwise, no results will be returned
+    threshold = min(threshold, max_score)
+    scores = [s if s >= threshold else 0 for s in scores]
+    if sum(scores) == 0:
+        return None, None
     max_index = scores.index(max_score)
     # Find the first non-zero score before the max score
     start = max_index
     for i in range(max_index - 1, -1, -1):
-        if scores[i] == 0:
+        if scores[i] < threshold:
             break
         start = i
 
     # Find the first non-zero score after the max score
     end = max_index + 1
     for i in range(max_index + 1, len(scores)):
-        if scores[i] == 0:
+        if scores[i] < threshold:
             break
         end = i + 1
 
-    print(start, end)
     return start, end
 
 
@@ -158,7 +158,6 @@ def merge_metadatas(metadatas):
         corrdinate[0] = p1
         corrdinate[1] = p3
 
-    print(coordinates)
     page_number = metadata["page_number"]
     file_name = metadata["filename"]
     return {
@@ -168,7 +167,7 @@ def merge_metadatas(metadatas):
     }
 
 
-def get_related_documents(contexts, match_text=None, filter_threshold=0.5):
+def get_related_documents(contexts, match_text=None, filter_threshold=0.1):
     """
     Convert contexts to a dataframe
     """
@@ -180,6 +179,8 @@ def get_related_documents(contexts, match_text=None, filter_threshold=0.5):
             start, end = rematch(
                 [e["text"] for e in source_elements], match_text, filter_threshold
             )
+            if start is None:
+                continue
             source_elements = source_elements[start:end]
         metadata = merge_metadatas([e["metadata"] for e in source_elements])
         page_number = metadata["page_number"]
@@ -194,6 +195,37 @@ def get_related_documents(contexts, match_text=None, filter_threshold=0.5):
         text = f"**file_name**: {file_name}\n\n**score**: {score}\n\n**text:**\n\n{chunk_data['txt']}"
         yield text, img
 
+def get_related_merged_documents(contexts, match_text=None, filter_threshold=0.1):
+    """
+    Convert contexts to a dataframe
+    Will merge the same page
+    """
+    image_folder = os.environ.get("IMAGES_FOLDER", None)
+
+    page_elements, page2score = groupby_source_elements(contexts)
+    for page_number, source_elements in page_elements.items():
+        if match_text:
+            start, end = rematch(
+                [e["text"] for e in source_elements], match_text, filter_threshold
+            )
+            if start is None:
+                continue
+            source_elements = source_elements[start:end]
+        text = "\n".join([e["text"] for e in source_elements])
+        metadata = merge_metadatas([e["metadata"] for e in source_elements])
+        file_name = metadata["file_name"]
+        coordinates = metadata["coordinates"]
+        file_path = os.path.join(image_folder, file_name, f"{page_number-1}.jpg")
+        if os.path.exists(file_path):
+            img = draw_rectangle_and_display(file_path, coordinates)
+        else:
+            img = None
+        score = round(page2score[page_number], 2)
+        text = (
+            f"**file_name**: {file_name}\n\n**score**: {score}\n\n**text:**\n\n{text}"
+        )
+        yield text, img
+
 
 def groupby_source_elements(contexts):
     """
@@ -202,7 +234,7 @@ def groupby_source_elements(contexts):
     from collections import defaultdict
 
     # Save the max score for each page
-    page2score = defaultdict(list)
+    page2score = {}
     page_elements = defaultdict(list)
     for source in contexts:
         chunk_data = source.outputs("elements", "chunk")
@@ -210,6 +242,10 @@ def groupby_source_elements(contexts):
         for element in source_elements:
             page_number = element["metadata"]["page_number"]
             page_elements[page_number].append(element)
+
+        page_number = chunk_data["source_elements"][0]["metadata"]["page_number"]
+        score = source["score"]
+        page2score[page_number] = max(page2score.get(page_number, 0), score)
 
     # Deduplicate elements in the page based on the num field
     for page_number, elements in page_elements.items():
@@ -219,7 +255,7 @@ def groupby_source_elements(contexts):
         # Sort elements by num
         page_elements[page_number].sort(key=lambda e: e["metadata"]["num"])
 
-    return page_elements
+    return page_elements, page2score
 
 
 def draw_rectangle_and_display(image_path, relative_coordinates, expand=0.005):

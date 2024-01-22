@@ -6,7 +6,7 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from sddb import init_db, load_questions, qa, vector_search
-from utils import get_related_documents
+from utils import get_related_documents, get_related_merged_documents
 
 load_dotenv()
 
@@ -79,8 +79,7 @@ if st.session_state["authentication_status"] or True:
             st.markdown(query)
             results = vector_search(db, query, top_k=5)
             st.markdown("#### Related Documents:")
-            for text, img in get_related_documents(results):
-                text = text.replace('\n', '<br>')
+            for text, img in get_related_merged_documents(results, query):
                 st.markdown(text)
                 if img:
                     st.image(img)
@@ -103,8 +102,7 @@ if st.session_state["authentication_status"] or True:
             st.markdown(output.content)
 
             st.markdown("#### Related Documents:")
-            for text, img in get_related_documents(out, output.content):
-                text = text.replace('\n', '<br>')
+            for text, img in get_related_merged_documents(out, output.content):
                 st.markdown(text)
                 if img:
                     st.image(img)
