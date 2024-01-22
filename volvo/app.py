@@ -61,7 +61,7 @@ def get_user_input(input_mode, input_key, questions):
         return st.selectbox("Choose a question:", questions, key=input_key)
 
 
-if st.session_state["authentication_status"] or True:
+if st.session_state["authentication_status"]:
     [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
 
     with tab_text_search:

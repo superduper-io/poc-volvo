@@ -1,4 +1,3 @@
-What components are included in the exhaust aftertreatment system?
 When is the air suspension system activated?
 What happens if Active Grip Control and the Traction Control System were off when the truck starts again?
 How is the instrument lighting automatically adjusted according to the ambient light?
@@ -18,3 +17,4 @@ How can the cargo weight be reset to zero?
 How do you generate a new report when automatic pre-trip check is disabled?
 What is the purpose of turning the hydraulic valve anticlockwise to the stop position?
 What functions does the control panel for the infotainment system have?
+What components are included in the exhaust aftertreatment system?

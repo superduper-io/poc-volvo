@@ -1,6 +1,8 @@
 import os
 from logging import getLogger
 
+from unstructured.partition.pdf_image.pdfminer_utils import init_pdfminer
+
 
 logger = getLogger(__name__)
 
@@ -109,32 +111,63 @@ def get_chunks(elements):
     return all_chunks_and_links
 
 
-def rematch(texts, answer, threshold=0.0):
+def rematch(texts, answer, n=5):
     texts_words = [set(t.split()) for t in texts]
     answer_words = set(answer.split())
     scores = [len(t & answer_words) / len(answer_words) for t in texts_words]
     max_score = max(scores)
+    max_score_index = scores.index(max_score)
     # make sure the threshold is not larger than the max score, otherwise, no results will be returned
-    threshold = min(threshold, max_score)
-    scores = [s if s >= threshold else 0 for s in scores]
-    if sum(scores) == 0:
-        return None, None
-    max_index = scores.index(max_score)
-    # Find the first non-zero score before the max score
-    start = max_index
-    for i in range(max_index - 1, -1, -1):
-        if scores[i] < threshold:
-            break
-        start = i
 
-    # Find the first non-zero score after the max score
-    end = max_index + 1
-    for i in range(max_index + 1, len(scores)):
-        if scores[i] < threshold:
-            break
-        end = i + 1
+    # Function to calculate the score of a concatenated text
+    def calculate_score(concatenated_text):
+        concatenated_words = set(concatenated_text.split())
+        return len(concatenated_words & answer_words) / len(answer_words)
 
-    return start, end
+        # Initialize variables
+
+    current_indexes = [max_score_index]
+    current_score = max_score
+    no_improvement_count = 0
+
+    # Concatenate indexes before the best match
+    for i in range(max_score_index - 1, -1, -1):
+        if scores[i] == 0:
+            no_improvement_count += 1
+            continue
+        if no_improvement_count >= n:
+            break
+        new_indexes = [i] + current_indexes
+        new_concatenated_text = " ".join(texts[index] for index in new_indexes)
+        new_score = calculate_score(new_concatenated_text)
+        if new_score > current_score:
+            current_indexes = new_indexes
+            current_score = new_score
+            no_improvement_count = 0
+        else:
+            no_improvement_count += 1
+
+    # Reset no_improvement_count for concatenating indexes after the best match
+    no_improvement_count = 0
+
+    # Concatenate indexes after the best match
+    for i in range(max_score_index + 1, len(texts)):
+        if scores[i] == 0:
+            no_improvement_count += 1
+            continue
+        if no_improvement_count >= n:
+            break
+        new_indexes = current_indexes + [i]
+        new_concatenated_text = " ".join(texts[index] for index in new_indexes)
+        new_score = calculate_score(new_concatenated_text)
+        if new_score > current_score:
+            current_indexes = new_indexes
+            current_score = new_score
+            no_improvement_count = 0
+        else:
+            no_improvement_count += 1
+
+    return current_indexes
 
 
 def merge_metadatas(metadatas):
@@ -167,7 +200,7 @@ def merge_metadatas(metadatas):
     }
 
 
-def get_related_documents(contexts, match_text=None, filter_threshold=0.1):
+def get_related_documents(contexts, match_text=None):
     """
     Convert contexts to a dataframe
     """
@@ -176,12 +209,10 @@ def get_related_documents(contexts, match_text=None, filter_threshold=0.1):
         chunk_data = source.outputs("elements", "chunk")
         source_elements = chunk_data["source_elements"]
         if match_text:
-            start, end = rematch(
-                [e["text"] for e in source_elements], match_text, filter_threshold
-            )
-            if start is None:
+            match_indexes = rematch([e["text"] for e in source_elements], match_text)
+            if not match_indexes:
                 continue
-            source_elements = source_elements[start:end]
+            source_elements = [source_elements[i] for i in match_indexes]
         metadata = merge_metadatas([e["metadata"] for e in source_elements])
         page_number = metadata["page_number"]
         file_name = metadata["file_name"]
@@ -195,7 +226,8 @@ def get_related_documents(contexts, match_text=None, filter_threshold=0.1):
         text = f"**file_name**: {file_name}\n\n**score**: {score}\n\n**text:**\n\n{chunk_data['txt']}"
         yield text, img
 
-def get_related_merged_documents(contexts, match_text=None, filter_threshold=0.1):
+
+def get_related_merged_documents(contexts, match_text=None):
     """
     Convert contexts to a dataframe
     Will merge the same page
@@ -205,12 +237,10 @@ def get_related_merged_documents(contexts, match_text=None, filter_threshold=0.1
     page_elements, page2score = groupby_source_elements(contexts)
     for page_number, source_elements in page_elements.items():
         if match_text:
-            start, end = rematch(
-                [e["text"] for e in source_elements], match_text, filter_threshold
-            )
-            if start is None:
+            match_indexes = rematch([e["text"] for e in source_elements], match_text)
+            if not match_indexes:
                 continue
-            source_elements = source_elements[start:end]
+            source_elements = [source_elements[i] for i in match_indexes]
         text = "\n".join([e["text"] for e in source_elements])
         metadata = merge_metadatas([e["metadata"] for e in source_elements])
         file_name = metadata["file_name"]

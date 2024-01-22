@@ -182,6 +182,7 @@ builds:
       apt-get install -y mongodb-org
       systemctl daemon-reload
       systemctl start mongod
+      apt-get install poppler-utils
 
       echo "INSTALLING python3.10"
       add-apt-repository ppa:deadsnakes/ppa
