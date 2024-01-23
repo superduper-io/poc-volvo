@@ -21,8 +21,9 @@ if "authentication_status" not in st.session_state:
     st.session_state["authentication_status"] = None
 
 # Replace with your own user credentials
+# TODO: Move to config file or generate a random password
 USERNAME = "admin"
-PASSWORD = "password"
+PASSWORD = "yKxYcSVRP9z+xb3jstTtfUq4YP8="
 
 # Hashed password
 hashed_password = hash_password(PASSWORD)
