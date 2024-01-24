@@ -10,6 +10,8 @@ from utils import get_related_documents, get_related_merged_documents
 
 load_dotenv()
 
+st.set_page_config(page_title="SuperDuperDB - Volvo User Manual App")
+
 
 # Function to generate a hash of the password
 def hash_password(password):
@@ -44,7 +46,7 @@ if st.sidebar.button("Login"):
         st.session_state["authentication_status"] = False
         st.sidebar.error("Incorrect Username/Password")
 
-st.title(os.environ.get("TITLE", "SuperDuperDB"))
+st.header(os.environ.get("TITLE", "SuperDuperDB"))
 
 db = st.cache_resource(init_db)()
 questions = st.cache_resource(load_questions)()
@@ -54,7 +56,7 @@ def get_user_input(input_mode, input_key, questions):
     """
     A function to get user input based on the input mode
     """
-    if input_mode == "Text Input":
+    if input_mode == "Free text":
         return st.text_input(
             "Enter your text", placeholder="Type here...", key=input_key
         )
@@ -63,12 +65,12 @@ def get_user_input(input_mode, input_key, questions):
 
 
 if st.session_state["authentication_status"]:
-    [tab_text_search, tab_qa_system] = st.tabs(["Text Search", "QA System"])
+    [tab_text_search, tab_qa_system] = st.tabs(["Text Vector Search", "AI Chat (Q&A)"])
 
     with tab_text_search:
         search_mode = st.radio(
-            "Choose your search mode:",
-            ["Question Selection", "Text Input"],
+            "Choose your input type:",
+            ["Predefined question", "Free text"],
             key="search_mode",
             horizontal=True,
         )
@@ -76,7 +78,7 @@ if st.session_state["authentication_status"]:
 
         submit_button = st.button("Search", key="text_search")
         if submit_button:
-            st.markdown("#### Query")
+            st.markdown("#### Input/Query")
             st.markdown(query)
             results = vector_search(db, query, top_k=5)
             st.markdown("#### Related Documents:")
@@ -87,8 +89,8 @@ if st.session_state["authentication_status"]:
 
     with tab_qa_system:
         qa_mode = st.radio(
-            "Choose your input mode:",
-            ["Question Selection", "Text Input"],
+            "Choose your input type:",
+            ["Predefined question", "Free text"],
             key="qa_mode",
             horizontal=True,
         )
@@ -96,7 +98,7 @@ if st.session_state["authentication_status"]:
 
         submit_button = st.button("Search", key="qa")
         if submit_button:
-            st.markdown("#### Query")
+            st.markdown("#### Input/Query")
             st.markdown(query)
             output, out = qa(db, query, vector_search_top_k=5)
             st.markdown("#### Answer:")
