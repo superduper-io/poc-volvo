@@ -203,19 +203,20 @@ builds:
       ./aws/install
 
       echo "INSTALLING superduperdb REQUIREMENTS"
-      git clone -b feat/pdf-encoder --single-branch --depth 1 https://github.com/jieguangzhou/superduperdb.git
+      git clone --depth 1 https://github.com/SuperDuperDB/superduperdb.git
       cd superduperdb
       pip install -e .[dev]
       cd ..
 
       echo "FETCHING CODE FROM BUCKET"
-      aws s3 sync s3://superduperdb-demo/volvo ./volvo
-      chmod -R 777 volvo
-      cd volvo
+      aws s3 sync s3://{{ config['bucket'] }}/{{ meta['project'] }} ./{{ meta['project'] }}
+      
+      chmod -R 777 {{ meta['project'] }}
+      cd {{ meta['project'] }}
 
       pip install --no-cache-dir -r requirements.txt
       pip install ipython jupyter streamlit cryptography==38.0.1
-      pip install vllm
+      pip install openai
 
 
       # echo "GETTING DATA"

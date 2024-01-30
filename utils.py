@@ -217,7 +217,7 @@ def get_related_documents(contexts, match_text=None):
         page_number = metadata["page_number"]
         file_name = metadata["file_name"]
         coordinates = metadata["coordinates"]
-        file_path = os.path.join(image_folder, file_name, f"{page_number-1}.jpg")
+        file_path = os.path.join(image_folder, file_name, f"{page_number}.jpg")
         if os.path.exists(file_path):
             img = draw_rectangle_and_display(file_path, coordinates)
         else:
@@ -245,7 +245,7 @@ def get_related_merged_documents(contexts, match_text=None):
         metadata = merge_metadatas([e["metadata"] for e in source_elements])
         file_name = metadata["file_name"]
         coordinates = metadata["coordinates"]
-        file_path = os.path.join(image_folder, file_name, f"{page_number-1}.jpg")
+        file_path = os.path.join(image_folder, file_name, f"{page_number}.jpg")
         if os.path.exists(file_path):
             img = draw_rectangle_and_display(file_path, coordinates)
         else:

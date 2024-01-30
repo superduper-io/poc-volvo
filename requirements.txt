@@ -6,3 +6,4 @@ sentence-transformers
 git+https://github.com/SuperDuperDB/superduperdb@main#egg=superduperdb
 python-dotenv
 click
+tqdm

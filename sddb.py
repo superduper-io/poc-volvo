@@ -3,6 +3,7 @@ import click
 
 import sentence_transformers
 from dotenv import load_dotenv
+from tqdm import tqdm
 from superduperdb import (
     Document,
     Listener,
@@ -14,6 +15,8 @@ from superduperdb import (
 )
 from superduperdb.backends.mongodb import Collection
 from superduperdb import logging
+from superduperdb.base.artifact import Artifact
+from superduperdb.ext.openai import OpenAIEmbedding
 
 from utils import get_chunks
 
@@ -24,12 +27,31 @@ SOURCE_KEY = "elements"
 COLLECTION_NAME_SOURCE = "source"
 
 MODEL_IDENTIFIER_CHUNK = "chunk"
-MODEL_IDENTIFIER_EMBEDDING = "embedding"
 MODEL_IDENTIFIER_LLM = "llm"
+MODEL_IDENTIFIER_EMBEDDING = "text-embedding-ada-002"
 VECTOR_INDEX_IDENTIFIER = "vector-index"
 
 COLLECTION_NAME_CHUNK = f"_outputs.{SOURCE_KEY}.{MODEL_IDENTIFIER_CHUNK}"
 CHUNK_OUTPUT_KEY = f"_outputs.{SOURCE_KEY}.{MODEL_IDENTIFIER_CHUNK}"
+
+
+def _predict(self, X, one: bool = False, **kwargs):
+    if isinstance(X, str):
+        if isinstance(self.preprocess, Artifact):
+            X = self.preprocess.artifact(X)
+        return self._predict_one(X)
+
+    if isinstance(self.preprocess, Artifact):
+        X = [self.preprocess.artifact(i) for i in X]
+
+    out = []
+    batch_size = kwargs.pop("batch_size", 100)
+    for i in tqdm(range(0, len(X), batch_size)):
+        out.extend(self._predict_a_batch(X[i : i + batch_size], **kwargs))
+    return out
+
+
+OpenAIEmbedding._predict = _predict
 
 
 def init_db():
@@ -56,16 +78,27 @@ def save_pdfs(db, pdf_folder):
     ]
     db.execute(collection.insert_many(to_insert))
 
+    logging.info(f"Converting {len(pdf_paths)} pdfs to images")
     image_folders = os.environ.get("IMAGES_FOLDER", "data/pdf-images")
     for pdf_name in pdf_names:
         pdf_path = os.path.join(pdf_folder, pdf_name)
-        images = convert_from_path(pdf_path)
+        print(pdf_path)
         image_folder = os.path.join(image_folders, pdf_name)
         if not os.path.exists(image_folder):
             os.makedirs(image_folder)
+        with tqdm(dynamic_ncols=True) as pbar:
+            page_num = 0
+            batch_size = 5
+            while True:
+                images = convert_from_path(pdf_path, first_page=page_num, last_page=page_num + batch_size)
+                if not images:
+                    pbar.close()
+                    break
 
-        for i, image in enumerate(images):
-            image.save(os.path.join(image_folder, f"{i}.jpg"))
+                for image in images:
+                    image.save(os.path.join(image_folder, f"{page_num}.jpg"))
+                    page_num += 1
+                    pbar.update(1)
 
 
 def add_chunk_model(db):
@@ -86,25 +119,46 @@ def add_chunk_model(db):
     )
 
 
-def add_vector_search_model(db):
+def add_vector_search_model(db, use_openai=False):
     chunk_collection = Collection("_outputs.elements.chunk")
 
-    def preprocess(x):
-        if isinstance(x, dict):
-            # For model chains, the logic of this key needs to be optimized.
-            chunk = sorted(x.items())[-1][1]
-            return chunk["txt"]
-        return x
+    if use_openai:
+        from superduperdb.ext.openai import OpenAIEmbedding
+        from superduperdb.base.artifact import Artifact
 
-    model = Model(
-        identifier=MODEL_IDENTIFIER_EMBEDDING,
-        object=sentence_transformers.SentenceTransformer("BAAI/bge-large-en-v1.5"),
-        encoder=vector(shape=(384,)),
-        predict_method="encode",
-        preprocess=preprocess,
-        postprocess=lambda x: x.tolist(),
-        batch_predict=True,
-    )
+        def preprocess(x):
+            if isinstance(x, dict):
+                # For model chains, the logic of this key needs to be optimized.
+                chunk = sorted(x.items())[-1][1]
+                return chunk["txt"]
+            return x
+
+        # Create an instance of the OpenAIEmbedding model with the specified identifier ('text-embedding-ada-002')
+        model = OpenAIEmbedding(
+            identifier=MODEL_IDENTIFIER_EMBEDDING,
+            model="text-embedding-ada-002",
+            preprocess=Artifact(preprocess),
+        )
+    else:
+
+        def preprocess(x):
+            if isinstance(x, dict):
+                # For model chains, the logic of this key needs to be optimized.
+                chunk = sorted(x.items())[-1][1]
+                return "passage: " + chunk["txt"]
+            return "query: " + x
+
+        model = Model(
+            identifier=MODEL_IDENTIFIER_EMBEDDING,
+            object=sentence_transformers.SentenceTransformer(
+                "intfloat/multilingual-e5-large"
+            ),
+            encoder=vector(shape=(1024,)),
+            predict_method="encode",
+            preprocess=preprocess,
+            postprocess=lambda x: x.tolist(),
+            batch_predict=True,
+        )
 
     db.add(
         VectorIndex(
@@ -264,10 +318,11 @@ def setup_db():
     init_db()
     # TODO: Support more configurations for building the database
     db = init_db()
+    use_openai = os.getenv("USE_OPENAI").upper() == "TRUE"
     save_pdfs(db, "pdf-folders")
     add_chunk_model(db)
-    add_vector_search_model(db)
-    add_llm_model(db, use_openai=os.getenv("USE_OPENAI").upper() == "TRUE")
+    add_vector_search_model(db, use_openai=use_openai)
+    add_llm_model(db, use_openai=use_openai)
 
 
 @click.command()
