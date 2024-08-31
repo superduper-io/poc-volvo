@@ -1,8 +1,10 @@
 superduper_mongodb
-streamlit
+streamlit~=1.38.0
 streamlit-authenticator
-unstructured[pdf]
+unstructured[pdf]~=0.15.8
 opencv-python-headless==4.8.0.74
-python-dotenv
-click
-tqdm
+python-dotenv~=1.0.1
+click~=8.1.7
+tqdm~=4.66.5
+superduper-framework
+pandas~=2.2.2
