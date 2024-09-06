@@ -1,8 +1,7 @@
 import os
 from logging import getLogger
 
-from unstructured.partition.pdf_image.pdfminer_utils import init_pdfminer
-
+from superduper import model
 
 logger = getLogger(__name__)
 
@@ -88,6 +87,7 @@ def create_chunk_and_metadatas(page_elements, stride=3, window=10):
     return datas
 
 
+@model(flatten=True, model_update_kwargs={'document_embedded': False})
 def get_chunks(elements):
     from collections import defaultdict
     from unstructured.documents.coordinates import RelativeCoordinateSystem
@@ -226,7 +226,7 @@ def get_related_documents(contexts, match_text=None):
         text = f"**file_name**: {file_name}\n\n**score**: {score}\n\n**text:**\n\n{chunk_data['txt']}"
         yield text, img
 
-
+# from pprint import pprint
 def get_related_merged_documents(contexts, match_text=None):
     """
     Convert contexts to a dataframe
@@ -267,7 +267,7 @@ def groupby_source_elements(contexts):
     page2score = {}
     page_elements = defaultdict(list)
     for source in contexts:
-        chunk_data = source.outputs("elements", "chunk")
+        chunk_data = source["_outputs"]["chunker"]
         source_elements = chunk_data["source_elements"]
         for element in source_elements:
             page_number = element["metadata"]["page_number"]

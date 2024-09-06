@@ -8,3 +8,5 @@ click~=8.1.7
 tqdm~=4.66.5
 superduper-framework
 pandas~=2.2.2
+superduper~=1.0.1
+superduper_sentence_transformers~=0.0.2

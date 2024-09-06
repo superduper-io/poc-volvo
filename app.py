@@ -102,10 +102,10 @@ if st.session_state["authentication_status"]:
             st.markdown(query)
             output, out = qa(db, query, vector_search_top_k=5)
             st.markdown("#### Answer:")
-            st.markdown(output.content)
+            st.markdown(output)
 
             st.markdown("#### Related Documents:")
-            for text, img in get_related_merged_documents(out, output.content):
+            for text, img in get_related_merged_documents(out, output):
                 st.markdown(text)
                 if img:
                     st.image(img)
