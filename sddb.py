@@ -213,8 +213,8 @@ def add_llm_model(db, use_openai=False,use_vllm=False):
     )
 
     if use_openai:
-        from superduper_openai import OpenAI
-        llm = OpenAI(identifier=MODEL_IDENTIFIER_LLM, prompt_template=prompt_template)
+        from superduper_openai import OpenAIChatCompletion
+        llm = OpenAIChatCompletion(identifier=MODEL_IDENTIFIER_LLM,  model='gpt-3.5-turbo')
 
     elif use_vllm:
         from superduper_vllm import VllmModel
@@ -296,15 +296,15 @@ Based on the information provided, please formulate one question related to the 
 
 Using the information above, generate your questions. Your question can be one of the following types: What, Why, When, Where, Who, How. Please respond in the following format:
 
-```json
+
 {
   \"question_type\": \"Type of question, e.g., 'What'\",
   \"question\": \"Your question \",
 }
-```
+ 
 """
     # reset the prompt function
-    llm.prompt_func = lambda x: generate_template % x
+    prompt = lambda x: generate_template % x
     datas = []
     import random
 
@@ -317,16 +317,15 @@ Using the information above, generate your questions. Your question can be one o
     questions = []
     for data in datas[: n * 5]:
         text = data["text"]
-        print("------texttexttexttexttexttexttexttexttexttext-------------------")
-        print(text)
-        print("------texttexttexttexttexttexttexttexttexttext-------------------")
         try:
-            result = llm.predict(text)
-            print("------resultresultresultresultresultresultresult-------------------")
+            result = llm.predict(prompt(text))
             pprint(result)
-            print("------resultresultresultresultresultresultresul-------------------")
-
-            json_result = eval(result)
+            # For Anthropic model adds extra "Here is a possible question based on the context provided:"
+            try:
+                json_result = eval(result)
+            except SyntaxError:
+                json_result = eval(result.split("\n",2)[2])
+            pprint(result)
             # keep the id
             questions.append(
                 {
