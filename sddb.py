@@ -130,10 +130,10 @@ def add_chunk_model(db):
     # )
 
 
-def add_vector_search_model(db, use_openai=False):
+def add_vector_search_model(db, use_openai_embed=False):
     chunk_collection = db[COLLECTION_NAME_CHUNK]
 
-    if use_openai:
+    if use_openai_embed:
         from superduper_openai import OpenAIEmbedding
         # from superduper.base.artifact import Artifact
 
@@ -319,13 +319,14 @@ Using the information above, generate your questions. Your question can be one o
         text = data["text"]
         try:
             result = llm.predict(prompt(text))
-            pprint(result)
+            print("llm output\n"+result)
             # For Anthropic model adds extra "Here is a possible question based on the context provided:"
             try:
                 json_result = eval(result)
             except SyntaxError:
                 json_result = eval(result.split("\n",2)[2])
-            pprint(result)
+            print('Formated JSON output')
+            pprint(json_result)
             # keep the id
             questions.append(
                 {
@@ -366,9 +367,10 @@ def setup_db():
     # TODO: Support more configurations for building the database
     db = init_db()
     use_openai = os.getenv("USE_OPENAI").upper() == "TRUE"
+    use_openai_embed = os.getenv("USE_OPENAI_EMBED").upper() == "TRUE"
     save_pdfs(db, "pdf-folders")
     add_chunk_model(db)
-    add_vector_search_model(db, use_openai=use_openai)
+    add_vector_search_model(db, use_openai_embed=use_openai_embed)
     add_llm_model(db, use_openai=use_openai,use_vllm=use_openai)
 
 
