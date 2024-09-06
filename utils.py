@@ -256,17 +256,19 @@ def get_related_merged_documents(contexts, match_text=None):
         )
         yield text, img
 
-
+from pprint import pprint
 def groupby_source_elements(contexts):
     """
     Group pages for all contexts
     """
     from collections import defaultdict
+    # print("-------- groupby_source_elements -----------------------")
 
     # Save the max score for each page
     page2score = {}
     page_elements = defaultdict(list)
     for source in contexts:
+        # pprint(source)
         chunk_data = source["_outputs"]["chunker"]
         source_elements = chunk_data["source_elements"]
         for element in source_elements:

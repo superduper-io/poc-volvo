@@ -30,7 +30,7 @@ COLLECTION_NAME_SOURCE = "source"
 
 MODEL_IDENTIFIER_CHUNK = "chunker"
 MODEL_IDENTIFIER_LLM = "llm"
-MODEL_IDENTIFIER_EMBEDDING = "embedding-bge-large"
+MODEL_IDENTIFIER_EMBEDDING = "embedding-bge-base"
 VECTOR_INDEX_IDENTIFIER = "vector-index"
 
 COLLECTION_NAME_CHUNK = f"_outputs.{MODEL_IDENTIFIER_CHUNK}"
@@ -181,7 +181,7 @@ def add_vector_search_model(db, use_openai=False):
                 key=CHUNK_OUTPUT_KEY,  # Key for the documents
                 model=embedding_model,  # Specify the model for processing
                 predict_kwargs={"max_chunk_size": 64},
-                uuid="embedding-bge-large",
+                uuid=MODEL_IDENTIFIER_EMBEDDING, # This one goes into db collection key name
             ),
         )
     db.apply(vector_index)
@@ -249,7 +249,7 @@ def build_prompt(query, docs):
         "Here's the question:{input}\n"
         "answer:"
     )
-    chunks = [doc["text"]["txt"] for doc in docs]
+    chunks = [doc['_outputs']['chunker']["txt"] for doc in docs]
     context = "\n\n".join(chunks)
     prompt = prompt_template.format(context=context, input=query)
     return prompt
@@ -257,7 +257,7 @@ def build_prompt(query, docs):
 def qa(db, query, vector_search_top_k=5):
     logging.info(f"QA query: {query}")
     chunk_collection = db[COLLECTION_NAME_CHUNK]
-    item = {'_outputs.chunker.txt': '<var:query>'}
+    item = {'_outputs.chunker': '<var:query>'}
     vector_search_model = QueryModel(
         identifier="VectorSearch",
         select=chunk_collection.like(
@@ -265,7 +265,7 @@ def qa(db, query, vector_search_top_k=5):
             vector_index=VECTOR_INDEX_IDENTIFIER,
             n=vector_search_top_k
         ).select(),
-        postprocess=lambda docs: [{"text": doc['_outputs.chunker'], "_source": doc["_source"],"score": doc["score"]} for doc in docs],
+        # postprocess=lambda docs: [{"text": doc['_outputs.chunker'], "_source": doc["_source"],"score": doc["score"]} for doc in docs],
         db=db
     )
     out = vector_search_model.predict(query=query)
@@ -276,6 +276,7 @@ def qa(db, query, vector_search_top_k=5):
     return output, out
 
 
+from pprint import pprint
 def generate_questions_from_db(n=20):
     # TODO: Generate questions for showing in the frontend
     db = init_db()
@@ -316,9 +317,15 @@ Using the information above, generate your questions. Your question can be one o
     questions = []
     for data in datas[: n * 5]:
         text = data["text"]
+        print("------texttexttexttexttexttexttexttexttexttext-------------------")
+        print(text)
+        print("------texttexttexttexttexttexttexttexttexttext-------------------")
         try:
             result = llm.predict(text)
-            print(result)
+            print("------resultresultresultresultresultresultresult-------------------")
+            pprint(result)
+            print("------resultresultresultresultresultresultresul-------------------")
+
             json_result = eval(result)
             # keep the id
             questions.append(
