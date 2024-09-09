@@ -30,7 +30,7 @@ COLLECTION_NAME_SOURCE = "source"
 
 MODEL_IDENTIFIER_CHUNK = "chunker"
 MODEL_IDENTIFIER_LLM = "llm"
-MODEL_IDENTIFIER_EMBEDDING = "embedding-bge-base"
+MODEL_IDENTIFIER_EMBEDDING = os.getenv("MODEL_IDENTIFIER_EMBEDDING")
 VECTOR_INDEX_IDENTIFIER = "vector-index"
 
 COLLECTION_NAME_CHUNK = f"_outputs.{MODEL_IDENTIFIER_CHUNK}"
@@ -135,7 +135,7 @@ def add_vector_search_model(db, use_openai_embed=False):
 
     if use_openai_embed:
         from superduper_openai import OpenAIEmbedding
-        # from superduper.base.artifact import Artifact
+        # from superduper  import Artifact
 
         def preprocess(x):
             if isinstance(x, dict):
@@ -147,7 +147,7 @@ def add_vector_search_model(db, use_openai_embed=False):
         # Create an instance of the OpenAIEmbedding model with the specified identifier ('text-embedding-ada-002')
         embedding_model = OpenAIEmbedding(
             identifier=MODEL_IDENTIFIER_EMBEDDING,
-            model="text-embedding-ada-002",
+            model="text-embedding-ada-002"
             # preprocess=Artifact(preprocess),
         )
     else:
@@ -172,7 +172,6 @@ def add_vector_search_model(db, use_openai_embed=False):
             postprocess=lambda x: x.tolist(),
             predict_kwargs={"show_progress_bar": True},
         )
-
     vector_index = \
         VectorIndex(
             identifier=VECTOR_INDEX_IDENTIFIER,
@@ -180,12 +179,11 @@ def add_vector_search_model(db, use_openai_embed=False):
                 select=chunk_collection.select(),
                 key=CHUNK_OUTPUT_KEY,  # Key for the documents
                 model=embedding_model,  # Specify the model for processing
-                predict_kwargs={"max_chunk_size": 64},
+                # predict_kwargs={"max_chunk_size": 64},
                 uuid=MODEL_IDENTIFIER_EMBEDDING, # This one goes into db collection key name
             ),
         )
     db.apply(vector_index)
-
 
 def vector_search(db, query, top_k=5):
     logging.info(f"Vector search query: {query}")
@@ -368,8 +366,8 @@ def setup_db():
     db = init_db()
     use_openai = os.getenv("USE_OPENAI").upper() == "TRUE"
     use_openai_embed = os.getenv("USE_OPENAI_EMBED").upper() == "TRUE"
-    save_pdfs(db, "pdf-folders")
-    add_chunk_model(db)
+    # save_pdfs(db, "pdf-folders")
+    # add_chunk_model(db)
     add_vector_search_model(db, use_openai_embed=use_openai_embed)
     add_llm_model(db, use_openai=use_openai,use_vllm=use_openai)
 
