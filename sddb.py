@@ -179,7 +179,7 @@ def add_vector_search_model(db, use_openai_embed=False):
                 select=chunk_collection.select(),
                 key=CHUNK_OUTPUT_KEY,  # Key for the documents
                 model=embedding_model,  # Specify the model for processing
-                predict_kwargs={"max_chunk_size": 64},
+                # predict_kwargs={"max_chunk_size": 64},
                 uuid=MODEL_IDENTIFIER_EMBEDDING, # This one goes into db collection key name
             ),
         )
