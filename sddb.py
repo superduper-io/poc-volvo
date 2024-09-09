@@ -34,7 +34,7 @@ MODEL_IDENTIFIER_EMBEDDING = os.getenv("MODEL_IDENTIFIER_EMBEDDING")
 VECTOR_INDEX_IDENTIFIER = "vector-index"
 
 COLLECTION_NAME_CHUNK = f"_outputs.{MODEL_IDENTIFIER_CHUNK}"
-CHUNK_OUTPUT_KEY = f"_outputs.{MODEL_IDENTIFIER_CHUNK}"
+CHUNK_OUTPUT_KEY = f"_outputs.{MODEL_IDENTIFIER_CHUNK}.txt"
 
 
 # def _predict(self, X, one: bool = False, **kwargs):
@@ -255,7 +255,7 @@ def build_prompt(query, docs):
 def qa(db, query, vector_search_top_k=5):
     logging.info(f"QA query: {query}")
     chunk_collection = db[COLLECTION_NAME_CHUNK]
-    item = {'_outputs.chunker': '<var:query>'}
+    item = {'_outputs.chunker.txt': '<var:query>'}
     vector_search_model = QueryModel(
         identifier="VectorSearch",
         select=chunk_collection.like(
@@ -307,7 +307,7 @@ Using the information above, generate your questions. Your question can be one o
     import random
 
     for chunk in chunks:
-        text = chunk[CHUNK_OUTPUT_KEY]["txt"]
+        text = chunk[CHUNK_OUTPUT_KEY]
         id_ = chunk["_id"]
         datas.append({"id": id_, "text": text})
 
