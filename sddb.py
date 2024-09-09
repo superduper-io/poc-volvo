@@ -179,7 +179,7 @@ def add_vector_search_model(db, use_openai_embed=False):
                 select=chunk_collection.select(),
                 key=CHUNK_OUTPUT_KEY,  # Key for the documents
                 model=embedding_model,  # Specify the model for processing
-                # predict_kwargs={"max_chunk_size": 64},
+                predict_kwargs={"max_chunk_size": 64},
                 uuid=MODEL_IDENTIFIER_EMBEDDING, # This one goes into db collection key name
             ),
         )
@@ -366,8 +366,8 @@ def setup_db():
     db = init_db()
     use_openai = os.getenv("USE_OPENAI").upper() == "TRUE"
     use_openai_embed = os.getenv("USE_OPENAI_EMBED").upper() == "TRUE"
-    # save_pdfs(db, "pdf-folders")
-    # add_chunk_model(db)
+    save_pdfs(db, "pdf-folders")
+    add_chunk_model(db)
     add_vector_search_model(db, use_openai_embed=use_openai_embed)
     add_llm_model(db, use_openai=use_openai,use_vllm=use_openai)
 
