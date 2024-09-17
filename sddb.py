@@ -366,10 +366,11 @@ def setup_db():
     db = init_db()
     use_openai = os.getenv("USE_OPENAI").upper() == "TRUE"
     use_openai_embed = os.getenv("USE_OPENAI_EMBED").upper() == "TRUE"
+    use_vllm = os.getenv("USE_VLLM").upper() == "TRUE"
     save_pdfs(db, "pdf-folders")
     add_chunk_model(db)
     add_vector_search_model(db, use_openai_embed=use_openai_embed)
-    add_llm_model(db, use_openai=use_openai,use_vllm=use_openai)
+    add_llm_model(db, use_openai=use_openai,use_vllm=use_vllm)
 
 
 @click.command()
