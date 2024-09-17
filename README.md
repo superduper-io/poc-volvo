@@ -14,26 +14,37 @@ POC investigating diverse sources of information and models.
 pip install -r requirements.txt
 ```
 
-### LLM Model
+### LLM Models
 
 #### Use OpenAI
 
-```
-pip install openai
-```
-
-Change .env
-
+Set 
 ```
 USE_OPENAI=TRUE
+USE_OPENAI_EMBED=TRUE
+OPENAI_API_KEY="sk-key-string"
 ```
+in the [.env](.env) 
 
-#### Use Open Source model
 
+Alternatively if `USE_OPENAI_EMBED=FALSE` the embedding defaults to local embedding 
+with  `SentenceTransformer` and [BAAI/bge-base-en-v1.5](https://huggingface.co/BAAI/bge-base-en-v1.5)
+
+#### Use VLLM
+```shell
+USE_VLLM=TRUE
+```
 ```bash
 pip install vllm
 ```
 
+
+#### Use Anthropic
+If both Open AI LLM and VLLM are not used then the default is Anthropic.
+Set your 
+```shell
+ANTHROPIC_API_KEY="sk-ant-xxx"
+```
 ### Data Preparation
 
 #### Parse the pdfs and add model in database
